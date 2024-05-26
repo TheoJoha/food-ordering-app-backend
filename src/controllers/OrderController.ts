@@ -7,6 +7,17 @@ const STRIPE = new Stripe(process.env.STRIPE_API_KEY as string)
 const FRONTEND_URL = process.env.FRONTEND_URL as string;
 const STRIPE_ENDPOINT_SECRET = process.env.STRIPE_WEBHOOK_SECRET as string;
 
+const getMyOrders = async (req: Request, res: Response) => {
+    try {
+        const orders = await Order.find({ user: req.userId }).populate("restaurant").populate("user")
+
+        res.json(orders)
+    } catch (e) {
+        console.log(e)
+        res.status(500).json({ message: "Something went wrong" })
+    }
+}
+
 type CheckoutSessionRequest = {
     cartItems: {
         menuItemId: string;
@@ -36,7 +47,7 @@ const stripeWebhookHandler = async (req: Request, res: Response) => {
         const order = await Order.findById(event.data.object.metadata?.orderId)
 
         if (!order) {
-            return res.status(404).json({message: "Order not found"})
+            return res.status(404).json({ message: "Order not found" })
         }
 
         order.totalAmount = event.data.object.amount_total;
@@ -70,18 +81,18 @@ const createCheckoutSession = async (req: Request, res: Response) => {
         const lineItems = createLineItems(checkoutSessionRequest, restaurant.menuItems)
 
         const session = await createSession(
-            lineItems, 
-            newOrder._id.toString(), 
-            restaurant.deliveryPrice, 
+            lineItems,
+            newOrder._id.toString(),
+            restaurant.deliveryPrice,
             restaurant._id.toString())
 
         if (!session.url) {
-            return res.status(500).json({message: "Error creating stripe session"})
+            return res.status(500).json({ message: "Error creating stripe session" })
         }
 
         await newOrder.save()
 
-        res.json({url: session.url})
+        res.json({ url: session.url })
 
     } catch (e: any) {
         console.log(e)
@@ -116,7 +127,7 @@ const createLineItems = (checkoutSessionRequest: CheckoutSessionRequest, menuIte
 }
 
 const createSession = async (lineItems: Stripe.Checkout.SessionCreateParams.LineItem[], orderId: string, deliveryPrice: number, restaurantId: string) => {
-    const sessionData =  await STRIPE.checkout.sessions.create({
+    const sessionData = await STRIPE.checkout.sessions.create({
         line_items: lineItems,
         shipping_options: [
             {
@@ -144,5 +155,6 @@ const createSession = async (lineItems: Stripe.Checkout.SessionCreateParams.Line
 
 export default {
     createCheckoutSession,
-    stripeWebhookHandler
+    stripeWebhookHandler,
+    getMyOrders,
 }
